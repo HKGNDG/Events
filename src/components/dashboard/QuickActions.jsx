@@ -8,29 +8,29 @@ import { MapPin, Calendar, TrendingUp, FileBarChart } from "lucide-react";
 export default function QuickActions() {
   const actions = [
     {
-      title: "Search Events Near Hotel",
-      description: "Find events within configured radius",
+      title: "Search Events",
+      description: "Find events near hotel",
       icon: MapPin,
       color: "blue",
       href: createPageUrl("Events")
     },
     {
-      title: "Check Today's Schedule", 
-      description: "View current day event impact",
+      title: "Today's Schedule", 
+      description: "View current day events",
       icon: Calendar,
       color: "emerald",
       href: createPageUrl("Events?filter=today")
     },
     {
-      title: "View Weekly Forecast",
-      description: "7-day event impact overview", 
+      title: "Analytics", 
+      description: "View reports & insights", 
       icon: TrendingUp,
       color: "purple",
       href: createPageUrl("Analytics")
     },
     {
-      title: "Generate Impact Report",
-      description: "Comprehensive analysis export",
+      title: "Generate Report",
+      description: "Export analysis data",
       icon: FileBarChart,
       color: "amber",
       href: createPageUrl("Analytics?action=report")
@@ -38,32 +38,31 @@ export default function QuickActions() {
   ];
 
   const colorClasses = {
-    blue: "bg-blue-600 hover:bg-blue-700 shadow-blue-600/25",
-    emerald: "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25",
-    purple: "bg-purple-600 hover:bg-purple-700 shadow-purple-600/25", 
-    amber: "bg-amber-600 hover:bg-amber-700 shadow-amber-600/25"
+    blue: "bg-blue-500 hover:bg-blue-600",
+    emerald: "bg-emerald-500 hover:bg-emerald-600",
+    purple: "bg-purple-500 hover:bg-purple-600", 
+    amber: "bg-amber-500 hover:bg-amber-600"
   };
 
   return (
-    <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-lg">
+    <Card className="bg-white border border-gray-200">
       <CardHeader className="pb-4">
-        <CardTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+        <CardTitle className="text-lg font-semibold text-gray-900">
           Quick Actions
-          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {actions.map((action, index) => (
             <Link key={index} to={action.href}>
               <Button 
                 variant="ghost" 
-                className={`h-auto p-6 w-full flex-col items-start gap-3 hover:scale-105 transition-all duration-300 ${colorClasses[action.color]} text-white hover:text-white group shadow-lg`}
+                className={`h-auto p-4 w-full flex-col items-start gap-2 hover:bg-gray-50 transition-colors duration-200 ${colorClasses[action.color]} text-white hover:text-white`}
               >
-                <action.icon className="w-8 h-8 group-hover:scale-110 transition-transform duration-200" />
+                <action.icon className="w-5 h-5" />
                 <div className="text-left">
-                  <h4 className="font-semibold text-sm mb-1">{action.title}</h4>
-                  <p className="text-xs opacity-90 leading-relaxed">{action.description}</p>
+                  <h4 className="font-medium text-sm mb-1">{action.title}</h4>
+                  <p className="text-xs opacity-90">{action.description}</p>
                 </div>
               </Button>
             </Link>

@@ -10,6 +10,14 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Calendar as CalendarIcon } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { 
   Filter,
   Calendar,
@@ -37,12 +45,14 @@ export default function EventFilters({
   eventCount = 0
 }) {
   const [activeFilters, setActiveFilters] = useState(0);
+  const [customDate, setCustomDate] = useState(null);
 
   const dateRangeOptions = [
     { value: "today", label: "TODAY", icon: Star, color: "from-emerald-500 to-teal-600" },
     { value: "week", label: "THIS WEEK", icon: Calendar, color: "from-blue-500 to-indigo-600" },
     { value: "month", label: "THIS MONTH", icon: Clock, color: "from-purple-500 to-pink-600" },
-    { value: "year", label: "THIS YEAR", icon: Target, color: "from-orange-500 to-red-600" }
+    { value: "year", label: "THIS YEAR", icon: Target, color: "from-orange-500 to-red-600" },
+    { value: "custom", label: "CUSTOM DATE", icon: Calendar, color: "from-indigo-500 to-purple-600" }
   ];
 
   const impactLevels = [
@@ -108,6 +118,10 @@ export default function EventFilters({
                 }`}
                 onClick={() => {
                   console.log('Date range clicked:', option.value);
+                  if (option.value === 'custom') {
+                    // Don't change the filter yet, let the calendar picker handle it
+                    return;
+                  }
                   onFiltersChange({ ...filters, dateRange: option.value });
                 }}
               >
@@ -116,6 +130,67 @@ export default function EventFilters({
               </Button>
             ))}
           </div>
+          
+          {/* Custom Date Calendar Picker */}
+          {filters.dateRange === 'custom' && (
+            <div className="mt-6 p-6 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-200/50">
+              <div className="flex items-center gap-4 mb-4">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                <h4 className="font-bold text-slate-900">Select Custom Date</h4>
+              </div>
+              <div className="flex items-center gap-4">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-[280px] justify-start text-left font-normal bg-white border-indigo-200 hover:border-indigo-300 rounded-xl px-4 py-3",
+                        !customDate && "text-slate-500"
+                      )}
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {customDate ? format(customDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white rounded-2xl shadow-xl border border-slate-200">
+                    <CalendarIcon
+                      mode="single"
+                      selected={customDate}
+                      onSelect={(date) => {
+                        setCustomDate(date);
+                        if (date) {
+                          onFiltersChange({ 
+                            ...filters, 
+                            dateRange: 'custom',
+                            customDate: date.toISOString().split('T')[0]
+                          });
+                        }
+                      }}
+                      initialFocus
+                      className="rounded-2xl"
+                    />
+                  </PopoverContent>
+                </Popover>
+                {customDate && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCustomDate(null);
+                      onFiltersChange({ ...filters, dateRange: 'month' });
+                    }}
+                    className="px-4 py-3 border-red-200 hover:border-red-300 text-red-600 hover:text-red-700 rounded-xl"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+              {customDate && (
+                <p className="text-sm text-slate-600 mt-2">
+                  Selected: {format(customDate, "EEEE, MMMM do, yyyy")}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Filter Controls Row */}

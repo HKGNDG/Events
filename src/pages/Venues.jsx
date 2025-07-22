@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 
 import { useToast } from "@/components/ui/use-toast";
+import { haversineDistance } from "@/utils/geoUtils";
 
 // Venue data with official links
 const VENUE_LINKS = {
@@ -53,6 +54,29 @@ const VENUE_LINKS = {
   "3rd & Lindsley": "https://www.3rdandlindsley.com/"
 };
 
+const HOTEL_LAT = 36.1527289;
+const HOTEL_LON = -86.7890460;
+
+const VENUE_SIZES = [50, 100, 200, 500];
+
+// Helper to display capacity
+function getDisplayCapacity(capacity) {
+  return (typeof capacity === 'number' && !isNaN(capacity) && capacity > 0)
+    ? capacity.toLocaleString()
+    : 'Not specified';
+}
+
+// Helper to display upcoming events count
+function getUpcomingEventsCount(upcoming) {
+  if (upcoming && typeof upcoming === 'object' && typeof upcoming._total === 'number') {
+    return upcoming._total;
+  }
+  if (typeof upcoming === 'number') {
+    return upcoming;
+  }
+  return 0;
+}
+
 export default function Venues() {
   const [venues, setVenues] = useState([]);
   const [filteredVenues, setFilteredVenues] = useState([]);
@@ -61,10 +85,13 @@ export default function Venues() {
   const [selectedVenue, setSelectedVenue] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const { toast } = useToast();
+  const [venueLimit, setVenueLimit] = useState(200); // default to 200
+  const [currentPage, setCurrentPage] = useState(1);
+  const [venuesPerPage] = useState(20);
 
   useEffect(() => {
     loadVenues();
-  }, []);
+  }, [venueLimit]);
 
   useEffect(() => {
     if (!Array.isArray(venues)) {
@@ -82,12 +109,13 @@ export default function Venues() {
     } else {
       setFilteredVenues(venues);
     }
+    setCurrentPage(1); // Reset to first page when search changes
   }, [venues, searchTerm]);
 
   const loadVenues = async () => {
     setIsLoading(true);
     try {
-      const venuesData = await Venue.list('capacity', 50);
+      const venuesData = await Venue.list(36.1656, -86.7781, 10, 'miles', venueLimit);
       const venuesArray = Array.isArray(venuesData) ? venuesData : [];
       setVenues(venuesArray);
       setFilteredVenues(venuesArray); // Initialize filtered venues with all data
@@ -141,6 +169,31 @@ export default function Venues() {
     }
   };
 
+  // Pagination logic
+  const indexOfLastVenue = currentPage * venuesPerPage;
+  const indexOfFirstVenue = indexOfLastVenue - venuesPerPage;
+  const currentVenues = filteredVenues.slice(indexOfFirstVenue, indexOfLastVenue);
+  const totalPages = Math.ceil(filteredVenues.length / venuesPerPage);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
       <div className="max-w-full mx-auto px-6 lg:px-8 py-8">
@@ -177,16 +230,29 @@ export default function Venues() {
           </div>
         </div>
 
-        {/* Search Bar */}
+        {/* Venue Limit Dropdown */}
         <div className="flex items-center gap-6 mb-8">
           <div className="flex-1 relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
-                          <Input
-                placeholder="Search venues, capacity, or type..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-12 pr-4 py-4 text-lg bg-white/90 backdrop-blur-sm border-slate-200 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300"
-              />
+            <Input
+              placeholder="Search venues, capacity, or type..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-12 pr-4 py-4 text-lg bg-white/90 backdrop-blur-sm border-slate-200 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300"
+            />
+          </div>
+          <div>
+            <label htmlFor="venue-limit" className="mr-2 font-bold text-slate-700">Show</label>
+            <select
+              id="venue-limit"
+              value={venueLimit}
+              onChange={e => setVenueLimit(Number(e.target.value))}
+              className="px-4 py-2 rounded-lg border border-emerald-200 bg-white text-emerald-700 font-bold shadow-md"
+            >
+              {VENUE_SIZES.map(size => (
+                <option key={size} value={size}>{size} venues</option>
+              ))}
+            </select>
           </div>
           <Button
             onClick={loadVenues}
@@ -235,31 +301,67 @@ export default function Venues() {
 
         {/* Venues Grid */}
         {!isLoading && filteredVenues.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {filteredVenues.map((venue) => (
-              <Card key={venue.id} className="group hover:shadow-2xl transition-all duration-500 bg-gradient-to-br from-white via-emerald-50/30 to-teal-50/30 backdrop-blur-sm border border-emerald-100/50 shadow-xl hover:scale-[1.02] cursor-pointer overflow-hidden relative">
-                {/* Animated gradient top border */}
-                <div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-500 via-cyan-500 to-blue-500 animate-pulse"></div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+              {currentVenues.map((venue) => (
+              <Card key={venue.id} className="group relative bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 border border-slate-100 overflow-hidden">
+                {/* Venue Image - Always show image area for consistent layout */}
+                <div className="relative h-48 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
+                  {venue.image_url ? (
+                    <>
+                      <img 
+                        src={venue.image_url} 
+                        alt={venue.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center" style={{display: 'none'}}>
+                        <BuildingIcon className="w-16 h-16 text-slate-400" />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 flex items-center justify-center overflow-hidden">
+                      {/* Animated background pattern */}
+                      <div className="absolute inset-0 opacity-20">
+                        <div className="absolute top-4 left-4 w-8 h-8 bg-emerald-400 rounded-full animate-pulse"></div>
+                        <div className="absolute top-12 right-8 w-6 h-6 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '0.5s'}}></div>
+                        <div className="absolute bottom-8 left-8 w-4 h-4 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '1s'}}></div>
+                        <div className="absolute bottom-16 right-4 w-10 h-10 bg-cyan-400 rounded-full animate-pulse" style={{animationDelay: '1.5s'}}></div>
+                      </div>
+                      
+                      {/* Main icon with glow effect */}
+                      <div className="relative z-10">
+                        <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-pulse">
+                          <BuildingIcon className="w-10 h-10 text-white" />
+                        </div>
+                        <div className="absolute inset-0 w-20 h-20 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl blur-xl opacity-50 animate-pulse"></div>
+                      </div>
+                      
+                      {/* Floating elements */}
+                      <div className="absolute top-6 left-6 w-3 h-3 bg-emerald-300 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      <div className="absolute top-8 right-6 w-2 h-2 bg-blue-300 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+                      <div className="absolute bottom-6 left-6 w-2 h-2 bg-purple-300 rounded-full animate-bounce" style={{animationDelay: '0.6s'}}></div>
+                      <div className="absolute bottom-8 right-6 w-3 h-3 bg-cyan-300 rounded-full animate-bounce" style={{animationDelay: '0.8s'}}></div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Icons */}
+                <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                  <Button variant="ghost" size="sm" className="w-8 h-8 p-0 bg-white/80 hover:bg-white rounded-full shadow-lg">
+                    <Star className="w-4 h-4 text-yellow-500" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="w-8 h-8 p-0 bg-white/80 hover:bg-white rounded-full shadow-lg">
+                    <span className="text-slate-400">−</span>
+                  </Button>
+                </div>
 
                 <CardContent className="p-6 space-y-4">
-                  {/* Header with badges */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex flex-col gap-2">
-                      <Badge className={`${getTierColor(venue.tier)} text-xs font-bold shadow-xl backdrop-blur-sm border border-white/20`}>
-                        {venue.tier}
-                      </Badge>
-                      <Badge className={`${getActivityColor(venue.activity_level)} text-xs font-bold shadow-xl backdrop-blur-sm border border-white/20`}>
-                        {venue.activity_level} Activity
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 bg-black/80 backdrop-blur-sm text-white px-3 py-2 rounded-full shadow-xl border border-white/20">
-                      <Star className="w-4 h-4 fill-current text-yellow-400" />
-                      <span className="font-bold text-sm">{venue.data_quality_score}</span>
-                    </div>
-                  </div>
-
                   {/* Venue Name */}
-                  <h3 className="text-xl font-bold text-slate-900 leading-tight group-hover:text-emerald-600 transition-colors duration-300">
+                  <h3 className="text-xl font-bold text-slate-900">
                     {venue.name}
                   </h3>
 
@@ -269,41 +371,43 @@ export default function Venues() {
                       <MapPin className="w-4 h-4 text-white" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-bold text-slate-900 text-sm">{venue.address}</p>
-                      <p className="text-slate-600 text-xs">{venue.distance_from_hotel} miles from hotel</p>
+                      <p className="font-bold text-slate-900 text-sm">{venue.address || '—'}</p>
+                      <p className="text-slate-600 text-xs">{venue.distance_from_search ? `${venue.distance_from_search.toFixed(2)} miles from search point` : ''}</p>
                     </div>
                   </div>
 
-                  {/* Capacity */}
-                  <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100/50">
-                    <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
-                      <Users className="w-4 h-4 text-white" />
+                  {/* Quick Stats Row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Capacity */}
+                    <div className="flex items-center gap-2 p-2 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100/50">
+                      <Users className="w-4 h-4 text-purple-600" />
+                      <div>
+                        <p className="font-bold text-slate-900 text-xs">Capacity</p>
+                        <p className="text-slate-600 text-xs">{getDisplayCapacity(venue.capacity)}</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-slate-900 text-sm">{venue.capacity?.toLocaleString()} Capacity</p>
-                      <div className="w-full bg-slate-200 rounded-full h-2 mt-1">
-                        <div 
-                          className="bg-gradient-to-r from-purple-500 to-pink-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min((venue.capacity / 70000) * 100, 100)}%` }}
-                        ></div>
+
+                    {/* Upcoming Events */}
+                    <div className="flex items-center gap-2 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100/50">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                      <div>
+                        <p className="font-bold text-slate-900 text-xs">Events</p>
+                        <p className="text-slate-600 text-xs">{getUpcomingEventsCount(venue.upcoming_events_count)}</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Upcoming Events */}
-                  <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100/50">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                      <Calendar className="w-4 h-4 text-white" />
+                  {/* Venue Type */}
+                  {venue.venue_type && (
+                    <div className="flex items-center gap-2">
+                      <BuildingIcon className="w-4 h-4 text-slate-500" />
+                      <span className="text-slate-600 text-sm">{venue.venue_type}</span>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-slate-900 text-sm">{venue.upcoming_events_count} upcoming events</p>
-                      <p className="text-slate-600 text-xs">{venue.venue_type}</p>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="flex items-center gap-3 pt-2">
-                    <Button 
+                    <Button
                       onClick={() => handleViewDetails(venue)}
                       className="flex-1 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:via-teal-700 hover:to-cyan-700 text-white font-bold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                     >
@@ -311,7 +415,7 @@ export default function Venues() {
                       View Details
                     </Button>
                     {VENUE_LINKS[venue.name] && (
-                      <Button 
+                      <Button
                         onClick={() => handleVisitWebsite(venue.name)}
                         variant="outline"
                         className="w-12 h-12 p-0 border-2 border-emerald-200 hover:border-emerald-300 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
@@ -327,6 +431,51 @@ export default function Venues() {
               </Card>
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-12">
+              <Button
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </Button>
+              
+              <div className="flex items-center gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`w-10 h-10 rounded-xl shadow-lg transition-all duration-300 ${
+                      currentPage === page
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    {page}
+                  </Button>
+                ))}
+              </div>
+              
+              <Button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </Button>
+            </div>
+          )}
+
+          {/* Page Info */}
+          <div className="text-center mt-6">
+            <p className="text-slate-600">
+              Showing {indexOfFirstVenue + 1}-{Math.min(indexOfLastVenue, filteredVenues.length)} of {filteredVenues.length} venues
+            </p>
+          </div>
+        </>
         )}
 
         {/* Empty State */}
@@ -362,10 +511,28 @@ export default function Venues() {
                 </Button>
                 
                 <div className="space-y-8">
-                  {/* Header */}
+                  {/* Header with Image */}
                   <div className="text-center">
+                    {selectedVenue.image_url && (
+                      <div className="mb-6">
+                        <img 
+                          src={selectedVenue.image_url} 
+                          alt={selectedVenue.name}
+                          className="w-full max-w-md mx-auto h-64 object-cover rounded-2xl shadow-xl"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
                     <h2 className="text-4xl font-bold text-slate-900 mb-2">{selectedVenue.name}</h2>
                     <p className="text-xl text-slate-600">{selectedVenue.venue_type}</p>
+                    {selectedVenue.url && (
+                      <a href={selectedVenue.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 mt-2 text-emerald-600 hover:underline">
+                        <ExternalLink className="w-4 h-4" />
+                        Visit Official Website
+                      </a>
+                    )}
                   </div>
 
                   {/* Venue Details Grid */}
@@ -375,53 +542,145 @@ export default function Venues() {
                         <MapPin className="w-6 h-6 text-emerald-600" />
                         <div>
                           <p className="font-bold text-slate-900">{selectedVenue.address}</p>
-                          <p className="text-slate-600">{selectedVenue.distance_from_hotel} miles from hotel</p>
+                          <p className="text-slate-600">{selectedVenue.distance_from_search ? `${selectedVenue.distance_from_search.toFixed(2)} miles from search point` : ''}</p>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl">
                         <Users className="w-6 h-6 text-purple-600" />
                         <div>
-                          <p className="font-bold text-slate-900">Capacity: {selectedVenue.capacity?.toLocaleString()}</p>
-                          <p className="text-slate-600">Seating: {selectedVenue.seating_capacity?.toLocaleString()}</p>
+                          <p className="font-bold text-slate-900">Capacity: {getDisplayCapacity(selectedVenue.capacity)}</p>
+                          <p className="text-slate-600">Venue type: {selectedVenue.venue_type || 'Other'}</p>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl">
                         <Calendar className="w-6 h-6 text-blue-600" />
                         <div>
-                          <p className="font-bold text-slate-900">{selectedVenue.upcoming_events_count} upcoming events</p>
-                          <p className="text-slate-600">High activity venue</p>
+                          <p className="font-bold text-slate-900">
+                            {getUpcomingEventsCount(selectedVenue.upcoming_events_count)} upcoming events
+                          </p>
+                          <p className="text-slate-600">Event activity</p>
                         </div>
                       </div>
+
+                      {/* Contact Information */}
+                      {selectedVenue.contact_phone && (
+                        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl">
+                          <Phone className="w-6 h-6 text-amber-600" />
+                          <div>
+                            <p className="font-bold text-slate-900">Contact: {selectedVenue.contact_phone}</p>
+                            <p className="text-slate-600">Box office information</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Box Office Hours */}
+                      {selectedVenue.box_office_hours && (
+                        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl">
+                          <Clock className="w-6 h-6 text-green-600" />
+                          <div>
+                            <p className="font-bold text-slate-900">Box Office Hours</p>
+                            <p className="text-slate-600 text-sm">{selectedVenue.box_office_hours}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="space-y-6">
-                      <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl">
-                        <Star className="w-6 h-6 text-amber-600" />
-                        <div>
-                          <p className="font-bold text-slate-900">Quality Score: {selectedVenue.data_quality_score}</p>
-                          <p className="text-slate-600">Data accuracy rating</p>
-                        </div>
-                      </div>
-                      
                       <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl">
-                        <TrendingUp className="w-6 h-6 text-indigo-600" />
+                        <Target className="w-6 h-6 text-indigo-600" />
                         <div>
-                          <p className="font-bold text-slate-900">{selectedVenue.tier} Tier</p>
-                          <p className="text-slate-600">{selectedVenue.activity_level} Activity Level</p>
+                          <p className="font-bold text-slate-900">Coordinates</p>
+                          <p className="text-slate-600">{selectedVenue.coordinates || 'Not available'}</p>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 rounded-2xl">
-                        <Target className="w-6 h-6 text-slate-600" />
+                        <MapPin className="w-6 h-6 text-slate-600" />
                         <div>
-                          <p className="font-bold text-slate-900">Coordinates</p>
-                          <p className="text-slate-600">{selectedVenue.coordinates}</p>
+                          <p className="font-bold text-slate-900">Venue ID</p>
+                          <p className="text-slate-600">{selectedVenue.id || 'Not available'}</p>
                         </div>
                       </div>
+
+                      {/* Parking Information */}
+                      {selectedVenue.parking_info && (
+                        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl">
+                          <BuildingIcon className="w-6 h-6 text-blue-600" />
+                          <div>
+                            <p className="font-bold text-slate-900">Parking Information</p>
+                            <p className="text-slate-600 text-sm">{selectedVenue.parking_info}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Accessibility Information */}
+                      {selectedVenue.accessibility_info && (
+                        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl">
+                          <Users className="w-6 h-6 text-purple-600" />
+                          <div>
+                            <p className="font-bold text-slate-900">Accessibility</p>
+                            <p className="text-slate-600 text-sm">{selectedVenue.accessibility_info}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Accepted Payment Methods */}
+                      {selectedVenue.accepted_payment && (
+                        <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl">
+                          <Globe className="w-6 h-6 text-green-600" />
+                          <div>
+                            <p className="font-bold text-slate-900">Accepted Payment</p>
+                            <p className="text-slate-600 text-sm">{selectedVenue.accepted_payment}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Additional Information */}
+                  {(selectedVenue.general_rules || selectedVenue.child_policy || selectedVenue.will_call_info) && (
+                    <div className="space-y-4">
+                      <h3 className="text-2xl font-bold text-slate-900">Additional Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {selectedVenue.general_rules && (
+                          <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 rounded-2xl">
+                            <h4 className="font-bold text-slate-900 mb-2">General Rules</h4>
+                            <p className="text-slate-600 text-sm">{selectedVenue.general_rules}</p>
+                          </div>
+                        )}
+                        {selectedVenue.child_policy && (
+                          <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 rounded-2xl">
+                            <h4 className="font-bold text-slate-900 mb-2">Child Policy</h4>
+                            <p className="text-slate-600 text-sm">{selectedVenue.child_policy}</p>
+                          </div>
+                        )}
+                        {selectedVenue.will_call_info && (
+                          <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 rounded-2xl">
+                            <h4 className="font-bold text-slate-900 mb-2">Will Call Information</h4>
+                            <p className="text-slate-600 text-sm">{selectedVenue.will_call_info}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Social Media */}
+                  {selectedVenue.twitter_handle && (
+                    <div className="text-center">
+                      <h3 className="text-2xl font-bold text-slate-900 mb-4">Social Media</h3>
+                      <a 
+                        href={`https://twitter.com/${selectedVenue.twitter_handle.replace('@','')}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-colors duration-300"
+                      >
+                        <span>Follow on Twitter</span>
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  )}
                   
                   {/* Action Buttons */}
                   <div className="flex items-center gap-4 pt-6">
@@ -434,13 +693,16 @@ export default function Venues() {
                         Visit Official Website
                       </Button>
                     )}
-                    <Button
-                      variant="outline"
-                      className="px-8 py-4 border-2 border-emerald-200 hover:border-emerald-300 rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-                    >
-                      <Phone className="w-5 h-5 mr-3" />
-                      Contact Venue
-                    </Button>
+                    {selectedVenue.contact_phone && (
+                      <Button
+                        variant="outline"
+                        className="px-8 py-4 border-2 border-emerald-200 hover:border-emerald-300 rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                        onClick={() => window.open(`tel:${selectedVenue.contact_phone}`)}
+                      >
+                        <Phone className="w-5 h-5 mr-3" />
+                        Call Venue
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

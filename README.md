@@ -1,43 +1,94 @@
 # Nashville Event Pulse 🎵
 
-A modern, full-stack event management system designed specifically for Nashville's vibrant entertainment scene. This application provides real-time event tracking, venue management, and impact analysis for hotels and businesses in the Nashville area.
+A modern, full-stack event management system for Nashville's vibrant entertainment scene. This application provides real-time event tracking, venue management, and impact analysis for hotels and businesses in the Nashville area.
 
-## 🌟 Features
+---
+
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Features](#features)
+3. [Tech Stack](#tech-stack)
+4. [Architecture](#architecture)
+5. [Setup & Installation](#setup--installation)
+6. [Configuration](#configuration)
+7. [File Structure](#file-structure)
+8. [API Reference](#api-reference)
+9. [UI Components](#ui-components)
+10. [Deployment](#deployment)
+11. [Contribution Guidelines](#contribution-guidelines)
+12. [Support & Contact](#support--contact)
+
+---
+
+## Project Overview
+
+Nashville Event Pulse is a full-stack web application that aggregates, analyzes, and visualizes event data for the Nashville area. It is designed for hotels, venues, and businesses to monitor real-time event impact, manage venues, and optimize guest experiences. The system fetches live event data from the Ticketmaster API, processes and scores events, and presents them in a beautiful, interactive dashboard.
+
+---
+
+## Features
 
 ### Frontend (React + Vite)
-- **Modern UI/UX**: Beautiful, responsive design with Tailwind CSS and Shadcn UI components
+- **Modern UI/UX**: Responsive design with Tailwind CSS and Shadcn UI
 - **Real-time Dashboard**: Live event statistics and impact metrics
 - **Event Management**: Comprehensive event listing with advanced filtering
 - **Venue Analytics**: Detailed venue information and capacity tracking
 - **Integration Hub**: External API connections and system monitoring
 - **Settings Management**: Configurable hotel and system preferences
+- **Image Optimization**: Quality-based image selection and fallback
 
 ### Backend (Spring Boot)
 - **RESTful API**: Complete REST API for frontend communication
 - **Ticketmaster Integration**: Real-time event data from Ticketmaster API
 - **Image Processing**: Intelligent image selection and optimization
+- **Impact Scoring**: Calculates event impact based on venue, category, date, and price
+- **Venue Metadata**: Enriches events with venue tier/type
 - **Multi-page Fetching**: Aggregates data from multiple API calls
 - **CORS Support**: Cross-origin resource sharing enabled
+- **Configurable**: API keys, base URL, and port via properties file
 
-## 🚀 Tech Stack
+---
+
+## Tech Stack
 
 ### Frontend
-- **React 18** - Modern React with hooks and functional components
-- **Vite** - Fast build tool and development server
-- **Tailwind CSS** - Utility-first CSS framework
-- **Shadcn UI** - Beautiful, accessible component library
-- **Lucide React** - Customizable icon library
-- **React Router** - Client-side routing
-- **Date-fns** - Date manipulation utilities
+- **React 18** (hooks, functional components)
+- **Vite** (fast build tool)
+- **Tailwind CSS** (utility-first CSS)
+- **Shadcn UI** (component library)
+- **Lucide React** (icon library)
+- **React Router** (routing)
+- **Date-fns** (date utilities)
 
 ### Backend
-- **Spring Boot 3** - Java-based microservices framework
-- **Maven** - Build automation and dependency management
-- **RestTemplate** - HTTP client for API calls
-- **Jackson** - JSON processing
-- **Spring Web** - RESTful web services
+- **Spring Boot 3** (Java microservices)
+- **Maven** (build automation)
+- **RestTemplate** (HTTP client)
+- **Jackson** (JSON processing)
+- **SLF4J** (logging)
 
-## 📦 Installation
+---
+
+## Architecture
+
+### High-Level Flow
+
+```mermaid
+graph TD;
+  A[User] -->|Browser| B(React Frontend)
+  B -->|REST API| C(Spring Boot Backend)
+  C -->|API Call| D(Ticketmaster API)
+  C -->|Processes & Scores| E[Event Data]
+  B -->|Displays| E
+```
+
+- **Frontend**: React app (Vite) fetches event/venue/config data from backend, renders dashboards, analytics, and management UIs.
+- **Backend**: Spring Boot app fetches and processes data from Ticketmaster, enriches with venue metadata, scores impact, and exposes REST endpoints.
+- **Image Processing**: Backend selects optimal images for events, provides metadata and fallbacks.
+
+---
+
+## Setup & Installation
 
 ### Prerequisites
 - Node.js 18+ 
@@ -46,63 +97,92 @@ A modern, full-stack event management system designed specifically for Nashville
 
 ### Frontend Setup
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
+npm run dev # Start development server
+npm run build # Build for production
 ```
 
 ### Backend Setup
 ```bash
-# Navigate to backend directory
 cd eventsystem
-
-# Build the project
 mvn clean install
-
-# Run the application
 mvn spring-boot:run
 ```
 
-## 🔧 Configuration
+---
 
-### Frontend Configuration
-The frontend connects to the backend API running on `http://localhost:8080` by default.
+## Configuration
 
-### Backend Configuration
-Update `eventsystem/src/main/resources/application.properties`:
+### Frontend
+- Connects to backend API at `http://localhost:8080` by default.
+
+### Backend
+Edit `eventsystem/src/main/resources/application.properties`:
 ```properties
 # Server configuration
 server.port=8080
 
 # Ticketmaster API configuration
-ticketmaster.api.key=YOUR_API_KEY
-ticketmaster.api.base-url=https://app.ticketmaster.com/discovery/v2
+api.ticketmaster.key=YOUR_API_KEY
+api.ticketmaster.base-url=https://app.ticketmaster.com/discovery/v2/events.json
 
 # CORS configuration
 spring.web.cors.allowed-origins=http://localhost:5173
 ```
 
-## 📊 API Endpoints
+---
+
+## File Structure
+
+```
+root/
+├── src/                # Frontend source
+│   ├── api/            # API integration helpers
+│   ├── components/     # UI components (dashboard, events, venues, etc.)
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # Utility libraries
+│   ├── pages/          # Page-level components (Dashboard, Events, Venues, etc.)
+│   ├── utils/          # Utility functions
+│   ├── App.jsx         # Main app component
+│   ├── main.jsx        # Entry point
+│   └── index.css       # Tailwind and global styles
+├── eventsystem/        # Backend (Spring Boot)
+│   ├── pom.xml         # Maven config
+│   ├── src/main/java/com/example/eventsystem/
+│   │   ├── EventsystemApplication.java   # Main entry
+│   │   ├── controller/EventController.java # REST API
+│   │   ├── service/TicketmasterService.java # Ticketmaster logic
+│   │   ├── service/ImageProcessingService.java # Image logic
+│   │   └── model/EventResponse.java      # Event data model
+│   └── src/main/resources/application.properties # Config
+├── package.json        # Frontend dependencies
+├── README.md           # This file
+└── ...
+```
+
+---
+
+## API Reference
 
 ### Events
-- `GET /api/events` - Get all events with pagination
-- `GET /api/events/{id}` - Get specific event
-- `GET /api/events/search` - Search events with filters
+- `GET /api/events` — List events (supports filtering, pagination, sorting)
+  - Query params: `startDate`, `endDate`, `keyword`, `page`, `size`, `sortBy`, `sortDir`, `lat`, `lon`, `radius`, `period`
+- `GET /api/venues` — List venues
+- `GET /api/config` — Get system config
+- `POST /api/config` — Update system config
 
-### Venues
-- `GET /api/venues` - Get all venues
-- `GET /api/venues/{id}` - Get specific venue
+#### Example
+```bash
+curl "http://localhost:8080/api/events?keyword=music&startDate=2025-08-01T00:00:00Z&endDate=2025-08-31T23:59:59Z"
+```
 
-### Configuration
-- `GET /api/config` - Get system configuration
-- `POST /api/config` - Update system configuration
+#### Response
+Returns a JSON array of event objects, each with:
+- `id`, `name`, `date`, `time`, `venue`, `address`, `category`, `price`, `ticketUrl`, `status`, `description`, `venueTier`, `venueType`, `impactScore`, `impactLevel`, `distance`, `eventImage`, `imageMetadata`, etc.
 
-## 🎨 UI Components
+---
+
+## UI Components
 
 ### Dashboard
 - Real-time event statistics
@@ -112,9 +192,9 @@ spring.web.cors.allowed-origins=http://localhost:5173
 
 ### Events
 - Advanced filtering (date, impact level, venue type)
-- Grid and list view modes
-- Event cards with images
-- Pagination support
+- Grid and list view
+- Event cards with images, badges, and metadata
+- Pagination
 
 ### Analytics
 - Event impact timeline
@@ -127,70 +207,39 @@ spring.web.cors.allowed-origins=http://localhost:5173
 - System health monitoring
 - External service management
 
-## 🔍 Key Features
+---
 
-### Image Processing
-- Automatic image selection from multiple sources
-- Quality-based image prioritization
-- Fallback mechanisms for missing images
-- Metadata extraction and optimization
+## Deployment
 
-### Event Filtering
-- Date range selection
-- Impact level filtering
-- Venue type categorization
-- Distance-based filtering
-- Real-time search
-
-### Responsive Design
-- Mobile-first approach
-- Tablet and desktop optimization
-- Touch-friendly interactions
-- Adaptive layouts
-
-## 🚀 Deployment
-
-### Frontend Deployment
+### Frontend
 ```bash
-# Build for production
 npm run build
-
-# Deploy to your preferred hosting service
-# (Netlify, Vercel, AWS S3, etc.)
+# Deploy dist/ to Netlify, Vercel, AWS S3, etc.
 ```
 
-### Backend Deployment
+### Backend
 ```bash
-# Build JAR file
+cd eventsystem
 mvn clean package
-
-# Run JAR file
 java -jar target/eventsystem-0.0.1-SNAPSHOT.jar
 ```
 
-## 🤝 Contributing
+---
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Contribution Guidelines
 
-## 📝 License
+1. Fork and clone the repository
+2. Create a new branch for your feature or fix
+3. Follow the existing code style (Java 17+, Spring Boot, React)
+4. Add/modify classes in the appropriate package
+5. Test your changes locally
+6. Submit a pull request with a clear description
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+---
 
-## 🙏 Acknowledgments
+## Support & Contact
 
-- **Ticketmaster API** - Event data source
-- **Shadcn UI** - Beautiful component library
-- **Tailwind CSS** - Utility-first CSS framework
-- **Lucide** - Icon library
-- **Spring Boot** - Backend framework
-
-## 📞 Support
-
-For support and questions:
+For support, questions, or feature requests:
 - Create an issue in this repository
 - Contact: harshit@nashvilledigitalgroup.com
 

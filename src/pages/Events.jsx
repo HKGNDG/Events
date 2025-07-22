@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Image } from "lucide-react";
+import { Venue } from "@/api/entities";
+import { haversineDistance } from "@/utils/geoUtils";
 
 // Enhanced image handling logic using utilities
 const getEventImage = (apiEvent) => {
@@ -378,9 +380,15 @@ export default function Events() {
     sortBy: 'date'
   });
 
+  const [venues, setVenues] = useState([]);
+
+  const HOTEL_LAT = 36.1527289;
+  const HOTEL_LON = -86.7890460;
+
   useEffect(() => {
     console.log('Filters changed:', filters);
     loadEvents();
+    loadVenues();
   }, [filters.dateRange, filters.distance, filters.sortBy]);
 
   useEffect(() => {
@@ -403,17 +411,40 @@ export default function Events() {
           endDateTime = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
           break;
         case 'month':
-           startDateTime = now.toISOString();
-           const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-           endDateTime = nextMonth.toISOString();
-           break;
+          startDateTime = now.toISOString();
+          const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+          endDateTime = nextMonth.toISOString();
+          break;
         case 'year':
+          startDateTime = now.toISOString();
+          const nextYear = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+          endDateTime = nextYear.toISOString();
+          break;
+        case 'custom':
+          if (filters.customDate) {
+            // Always use full day in UTC for the selected custom date
+            // filters.customDate is 'YYYY-MM-DD', so add 'T00:00:00Z' for UTC midnight
+            const customDateStr = filters.customDate + 'T00:00:00Z';
+            const customDate = new Date(customDateStr);
+            startDateTime = customDate.toISOString();
+            // End of the day: add 24 hours minus 1 ms
+            endDateTime = new Date(customDate.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString();
+            console.log('Custom date:', filters.customDate, 'Start:', startDateTime, 'End:', endDateTime);
+          } else {
+            // Fallback to month if no custom date is set
             startDateTime = now.toISOString();
-            const nextYear = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-            endDateTime = nextYear.toISOString();
-            break;
+            const fallbackMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+            endDateTime = fallbackMonth.toISOString();
+          }
+          break;
+        default:
+          // Default to month
+          startDateTime = now.toISOString();
+          const defaultMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+          endDateTime = defaultMonth.toISOString();
+          break;
       }
-      
+
       const params = {
         latlong: '36.1656,-86.7781', // Nashville Hotel Coords
         radius: filters.distance,
@@ -421,9 +452,11 @@ export default function Events() {
         endDateTime: endDateTime.split('.')[0] + 'Z',
         sort: filters.sortBy
       };
+      console.log('API params:', params);
 
       const response = await discoverEvents(params);
       const mappedEvents = response._embedded?.events.map(mapApiEventToInternal) || [];
+      console.log('Events returned:', mappedEvents.length, mappedEvents.map(e => e.date || e.startDate));
       
       setAllEvents(mappedEvents);
       setPagination({
@@ -574,6 +607,29 @@ export default function Events() {
     setIsLoading(false);
   };
 
+  const loadVenues = async () => {
+    try {
+      const venuesData = await Venue.list(36.1656, -86.7781, 10, 'miles', 100);
+      setVenues(Array.isArray(venuesData) ? venuesData : []);
+    } catch (error) {
+      setVenues([]);
+    }
+  };
+
+  // Helper to get latest venue info for an event
+  const getVenueDataForEvent = (event) => {
+    if (!event || !venues.length) return {};
+    // Try to match by name (case-insensitive, trimmed)
+    const match = venues.find(v => v.name.trim().toLowerCase() === (event.venue_name || event.venue).trim().toLowerCase());
+    if (!match) return {};
+    // Calculate distance if possible
+    let distance_from_hotel = match.distance_from_hotel;
+    if ((match.latitude && match.longitude)) {
+      distance_from_hotel = haversineDistance(HOTEL_LAT, HOTEL_LON, match.latitude, match.longitude);
+    }
+    return { ...match, distance_from_hotel };
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
       <div className="max-w-full mx-auto px-6 lg:px-8 py-8">
@@ -679,14 +735,25 @@ export default function Events() {
                 ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8"
                 : "space-y-6"
             }>
-              {events.map((event) => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  onViewDetails={handleViewDetails}
-                  onAddToWatchlist={handleAddToWatchlist}
-                />
-              ))}
+              {events.map((event) => {
+                const venueData = getVenueDataForEvent(event);
+                return (
+                  <EventCard
+                    key={event.id}
+                    event={{
+                      ...event,
+                      // Overwrite with latest venue info if available
+                      venue_capacity: venueData.capacity ?? event.venue_capacity,
+                      distance_miles: venueData.distance_from_hotel ?? event.distance_miles,
+                      venue_tier: venueData.tier ?? event.venue_tier,
+                      venue_type: venueData.venue_type ?? event.venue_type,
+                      venue_address: venueData.address ?? event.venue_address,
+                    }}
+                    onViewDetails={handleViewDetails}
+                    onAddToWatchlist={handleAddToWatchlist}
+                  />
+                );
+              })}
             </div>
 
             {/* Pagination Controls */}

@@ -20,6 +20,16 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
+function parseEventDate(dateStr) {
+  // If dateStr is in 'YYYY-MM-DD' format, parse as local date
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  // Otherwise, parse as usual (handles ISO strings with time)
+  return new Date(dateStr);
+}
+
 export default function EventCard({ event, onViewDetails, onAddToWatchlist }) {
   const impactColors = {
     CRITICAL: "bg-gradient-to-r from-red-500 via-rose-500 to-pink-600 text-white shadow-xl shadow-red-500/25",
@@ -197,7 +207,7 @@ export default function EventCard({ event, onViewDetails, onAddToWatchlist }) {
             </div>
             <div className="flex-1">
               <span className="font-bold text-sm text-slate-800">
-                {format(new Date(event.date), 'EEEE, MMMM d, yyyy')}
+                {format(parseEventDate(event.date), 'EEEE, MMMM d, yyyy')}
               </span>
               {event.time && (
                 <div className="flex items-center gap-1 mt-1">

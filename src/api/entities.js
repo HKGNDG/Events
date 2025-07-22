@@ -39,8 +39,8 @@ export const Event = {
 
 // Venue API
 export const Venue = {
-  list: async (sortBy = 'name', limit = 50) => {
-    const response = await fetch(`${API_BASE}/venues?sortBy=${sortBy}&size=${limit}`);
+  list: async (lat = 36.1656, lon = -86.7781, radius = 10, unit = 'miles', size = 50) => {
+    const response = await fetch(`${API_BASE}/venues?lat=${lat}&lon=${lon}&radius=${radius}&unit=${unit}&size=${size}`);
     if (!response.ok) throw new Error('Failed to fetch venues');
     return response.json();
   },

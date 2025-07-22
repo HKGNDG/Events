@@ -12,11 +12,7 @@ import {
   X,
   Hotel,
   Bell,
-  User,
-  Search,
-  Plus,
-  Download,
-  RefreshCw
+  User
 } from "lucide-react";
 import {
   Sidebar,
@@ -85,6 +81,12 @@ export default function Layout({ children, currentPageName }) {
   const location = useLocation();
   const pageTitle = currentPageName || navigationItems.find(item => item.url === location.pathname)?.title || "Dashboard";
 
+  // Helper to close sidebar on mobile after nav
+  const handleNavClick = () => {
+    // For mobile, we'll use a simple approach - just navigate and let the sidebar auto-close
+    // The sidebar will close automatically on mobile when clicking outside or navigating
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
@@ -121,7 +123,7 @@ export default function Layout({ children, currentPageName }) {
           }
         `}</style>
 
-        <Sidebar className="border-r border-slate-200/60 sidebar-gradient shadow-xl">
+        <Sidebar className="border-r border-slate-200/60 sidebar-gradient shadow-xl min-w-[280px]">
           <SidebarHeader className="border-b border-slate-200/40 p-6">
             <div className="flex items-center gap-4">
               <div className="relative">
@@ -132,14 +134,14 @@ export default function Layout({ children, currentPageName }) {
               </div>
               <div>
                 <h2 className="font-bold text-slate-900 text-xl tracking-tight">Nashville Hotel</h2>
-                <p className="text-sm text-slate-600 font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <p className="text-sm text-slate-600 font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent whitespace-nowrap">
                   Event Intelligence
                 </p>
               </div>
             </div>
           </SidebarHeader>
           
-          <SidebarContent className="p-4">
+          <SidebarContent className="p-4 overflow-y-auto">
             <SidebarGroup>
               <SidebarGroupLabel className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 py-4">
                 Platform
@@ -157,8 +159,9 @@ export default function Layout({ children, currentPageName }) {
                               ? `bg-gradient-to-r ${item.color} text-white shadow-xl shadow-blue-500/25 transform scale-105` 
                               : 'hover:nav-item-hover hover:shadow-lg hover:scale-105'
                           }`}
+                          onClick={handleNavClick}
                         >
-                          <Link to={item.url} className="flex items-center gap-4 px-4 py-4">
+                          <Link to={item.url} aria-current={isActive ? "page" : undefined} className="flex items-center gap-4 px-4 py-4">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
                               isActive 
                                 ? 'bg-white/20 backdrop-blur-sm' 
@@ -168,13 +171,13 @@ export default function Layout({ children, currentPageName }) {
                                 isActive ? 'text-white' : 'text-white group-hover:scale-110'
                               }`} />
                             </div>
-                            <div className="flex-1">
-                              <span className={`font-bold text-sm ${
+                            <div className="flex-1 min-w-0">
+                              <span className={`font-bold text-sm block truncate ${
                                 isActive ? 'text-white' : 'text-slate-900'
                               }`}>
                                 {item.title}
                               </span>
-                              <p className={`text-xs ${
+                              <p className={`text-xs block truncate ${
                                 isActive ? 'text-white/80' : 'text-slate-500'
                               }`}>
                                 {item.description}
@@ -231,8 +234,8 @@ export default function Layout({ children, currentPageName }) {
                 <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-white"></div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-900 text-sm truncate">Operations Manager</p>
-                <p className="text-xs text-slate-500 truncate">Nashville Hotel</p>
+                <p className="font-bold text-slate-900 text-sm block truncate">Operations Manager</p>
+                <p className="text-xs text-slate-500 block truncate">Nashville Hotel</p>
               </div>
               <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg">
                 <Bell className="w-4 h-4" />
@@ -244,50 +247,17 @@ export default function Layout({ children, currentPageName }) {
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* Enhanced App Header */}
           <header className="flex-shrink-0 glass-effect border-b border-slate-200/60 shadow-sm">
-            <div className="mx-auto px-6 h-20 flex items-center justify-between">
+            <div className="mx-auto px-6 h-20 flex items-center">
               {/* Page Title / Mobile Menu Trigger */}
               <div className="flex items-center gap-6">
                 <SidebarTrigger className="md:hidden -ml-2 hover:bg-slate-100 p-2 rounded-xl transition-all duration-200 hover:scale-105" />
-                <div className="hidden md:block">
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <div className="pl-4">
+                  <h1 className="text-2xl font-bold text-gray-900">
                     {pageTitle}
                   </h1>
-                  <p className="text-sm text-slate-500 mt-1">
+                  <p className="text-sm text-gray-600 mt-1">
                     {navigationItems.find(item => item.url === location.pathname)?.description || "Overview & Analytics"}
                   </p>
-                </div>
-              </div>
-
-              {/* Search Bar */}
-              <div className="hidden lg:flex flex-1 max-w-md mx-8">
-                <div className="relative w-full">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input 
-                    placeholder="Search events, venues, analytics..." 
-                    className="pl-10 bg-white/80 border-slate-200/60 rounded-xl focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-              </div>
-
-              {/* User menu and actions */}
-              <div className="flex items-center gap-3">
-                <Button variant="outline" className="hidden sm:flex gap-2 bg-white/80 border-slate-200/60 hover:bg-white rounded-xl">
-                  <Download className="w-4 h-4" />
-                  Export
-                </Button>
-                <Button variant="outline" className="hidden sm:flex gap-2 bg-white/80 border-slate-200/60 hover:bg-white rounded-xl">
-                  <Plus className="w-4 h-4" />
-                  New Event
-                </Button>
-                <Button variant="ghost" size="icon" className="text-slate-500 hover:bg-slate-100 rounded-xl hover:scale-105 transition-all duration-200">
-                  <RefreshCw className="w-5 h-5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="text-slate-500 hover:bg-slate-100 rounded-xl hover:scale-105 transition-all duration-200 relative">
-                  <Bell className="w-5 h-5" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
-                </Button>
-                <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-gray-700 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-all duration-200 cursor-pointer">
-                  <User className="w-5 h-5 text-white" />
                 </div>
               </div>
             </div>

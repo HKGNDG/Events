@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 export default function VenueCard({ venue }) {
+  console.log('VenueCard venue:', venue); // Debug output
   const tierColors = {
     MEGA: "bg-purple-100 text-purple-800 border-purple-200",
     MAJOR: "bg-blue-100 text-blue-800 border-blue-200",
@@ -66,11 +67,11 @@ export default function VenueCard({ venue }) {
           <MapPin className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{venue.address}</p>
-            {venue.distance_from_hotel && (
-              <p className={`text-xs font-semibold ${distanceColor}`}>
-                {venue.distance_from_hotel.toFixed(1)} miles from hotel
-              </p>
-            )}
+            <p className={`text-xs font-semibold ${distanceColor}`}>
+              {venue.distance_from_hotel !== undefined && venue.distance_from_hotel !== null
+                ? `${venue.distance_from_hotel.toFixed(2)} miles from hotel`
+                : 'N/A'}
+            </p>
           </div>
         </div>
 

@@ -340,6 +340,23 @@ public class TicketmasterService {
         return Math.round(R * c * 10.0) / 10.0; // round to 1 decimal
     }
 
+    /**
+     * Helper method to extract upcoming events count from the venue data
+     */
+    private int getUpcomingEventsCount(Object upcoming) {
+        if (upcoming instanceof Map) {
+            Map upcomingMap = (Map) upcoming;
+            Object total = upcomingMap.get("_total");
+            if (total instanceof Number) {
+                return ((Number) total).intValue();
+            }
+        }
+        if (upcoming instanceof Number) {
+            return ((Number) upcoming).intValue();
+        }
+        return 0;
+    }
+
     // Simple impact score calculation
     private int calculateImpactScore(EventResponse er) {
         int score = 0;
@@ -386,5 +403,239 @@ public class TicketmasterService {
         if (score >= 40) return "High";
         if (score >= 25) return "Medium";
         return "Low";
+    }
+
+    /**
+     * Fetch venues from Ticketmaster API based on coordinates, radius, and unit.
+     * @param lat Latitude in decimal degrees
+     * @param lon Longitude in decimal degrees
+     * @param radius Search radius (default 25)
+     * @param unit 'miles' or 'km' (default 'miles')
+     * @param size Max venues per page (default 200)
+     * @return List of venue maps with required fields
+     */
+    public List<Map<String, Object>> fetchVenues(double lat, double lon, int radius, String unit, int size) {
+        List<Map<String, Object>> allVenues = new ArrayList<>();
+        int currentPage = 0;
+        int pageSize = Math.min(size, 200); // Ticketmaster max per page
+        boolean morePages = true;
+        String venuesUrl = "https://app.ticketmaster.com/discovery/v2/venues.json";
+
+        try {
+            while (morePages) {
+                UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(venuesUrl)
+                    .queryParam("apikey", apiKey)
+                    .queryParam("latlong", lat + "," + lon)
+                    .queryParam("radius", radius)
+                    .queryParam("unit", unit)
+                    .queryParam("size", pageSize)
+                    .queryParam("page", currentPage);
+
+                String url = builder.toUriString();
+                logger.info("Fetching venues page {} from Ticketmaster API: {}", currentPage, url);
+
+                Map response = restTemplate.getForObject(url, Map.class);
+                if (response == null || !response.containsKey("_embedded")) {
+                    break;
+                }
+                Map embedded = (Map) response.get("_embedded");
+                List<Map> venues = (List<Map>) embedded.get("venues");
+                if (venues == null || venues.isEmpty()) {
+                    break;
+                }
+
+                for (Map venue : venues) {
+                    Map<String, Object> venueMap = new HashMap<>();
+                    venueMap.put("id", venue.get("id"));
+                    venueMap.put("name", venue.get("name"));
+                    venueMap.put("url", venue.get("url")); // Website URL
+
+                    // Images - get the best image
+                    List<Map> images = (List<Map>) venue.get("images");
+                    if (images != null && !images.isEmpty()) {
+                        // Find the best image (prefer 16:9 ratio, then 4:3, then any)
+                        Map bestImage = null;
+                        for (Map img : images) {
+                            String ratio = (String) img.get("ratio");
+                            if ("16_9".equals(ratio)) {
+                                bestImage = img;
+                                break;
+                            } else if ("4_3".equals(ratio) && bestImage == null) {
+                                bestImage = img;
+                            } else if (bestImage == null) {
+                                bestImage = img;
+                            }
+                        }
+                        if (bestImage != null) {
+                            venueMap.put("image_url", bestImage.get("url"));
+                            venueMap.put("image_width", bestImage.get("width"));
+                            venueMap.put("image_height", bestImage.get("height"));
+                            venueMap.put("image_ratio", bestImage.get("ratio"));
+                        }
+                    }
+
+                    // Address
+                    StringBuilder address = new StringBuilder();
+                    Map addr = (Map) venue.get("address");
+                    if (addr != null && addr.get("line1") != null) address.append(addr.get("line1")).append(", ");
+                    Map city = (Map) venue.get("city");
+                    if (city != null && city.get("name") != null) address.append(city.get("name")).append(", ");
+                    Map state = (Map) venue.get("state");
+                    if (state != null && state.get("stateCode") != null) address.append(state.get("stateCode")).append(", ");
+                    if (venue.get("postalCode") != null) address.append(venue.get("postalCode"));
+                    venueMap.put("address", address.toString());
+
+                    // Coordinates
+                    Map location = (Map) venue.get("location");
+                    Double venueLat = null, venueLon = null;
+                    if (location != null) {
+                        try {
+                            venueLat = location.get("latitude") != null ? Double.parseDouble(location.get("latitude").toString()) : null;
+                            venueLon = location.get("longitude") != null ? Double.parseDouble(location.get("longitude").toString()) : null;
+                        } catch (Exception ignore) {}
+                    }
+                    venueMap.put("latitude", venueLat);
+                    venueMap.put("longitude", venueLon);
+                    venueMap.put("coordinates", (venueLat != null && venueLon != null) ? (venueLat + "," + venueLon) : "");
+
+                    // Distance calculation
+                    if (venueLat != null && venueLon != null) {
+                        venueMap.put("distance_from_search", haversine(lat, lon, venueLat, venueLon));
+                    } else {
+                        venueMap.put("distance_from_search", null);
+                    }
+
+                    // Box Office Info
+                    Map boxOffice = (Map) venue.get("boxOfficeInfo");
+                    if (boxOffice != null) {
+                        venueMap.put("contact_phone", boxOffice.get("phoneNumberDetail"));
+                        venueMap.put("box_office_hours", boxOffice.get("openHoursDetail"));
+                        venueMap.put("accepted_payment", boxOffice.get("acceptedPaymentDetail"));
+                        venueMap.put("will_call_info", boxOffice.get("willCallDetail"));
+                    } else {
+                        venueMap.put("contact_phone", null);
+                        venueMap.put("box_office_hours", null);
+                        venueMap.put("accepted_payment", null);
+                        venueMap.put("will_call_info", null);
+                    }
+
+                    // Parking and Accessibility
+                    venueMap.put("parking_info", venue.get("parkingDetail"));
+                    venueMap.put("accessibility_info", venue.get("accessibleSeatingDetail"));
+
+                    // General Info
+                    Map generalInfo = (Map) venue.get("generalInfo");
+                    if (generalInfo != null) {
+                        venueMap.put("general_rules", generalInfo.get("generalRule"));
+                        venueMap.put("child_policy", generalInfo.get("childRule"));
+                    } else {
+                        venueMap.put("general_rules", null);
+                        venueMap.put("child_policy", null);
+                    }
+
+                    // Social Media
+                    Map social = (Map) venue.get("social");
+                    if (social != null) {
+                        Map twitter = (Map) social.get("twitter");
+                        if (twitter != null) {
+                            venueMap.put("twitter_handle", twitter.get("handle"));
+                        }
+                    }
+
+                    // Venue type/category
+                    List<Map> classifications = (List<Map>) venue.get("classifications");
+                    if (classifications != null && !classifications.isEmpty()) {
+                        Map segment = (Map) classifications.get(0).get("segment");
+                        if (segment != null && segment.get("name") != null) {
+                            venueMap.put("venue_type", segment.get("name"));
+                        }
+                    } else {
+                        venueMap.put("venue_type", "Other");
+                    }
+
+                    // Capacity (if available)
+                    Object rawCapacity = venue.get("capacity");
+                    if (rawCapacity != null) {
+                        try {
+                            int capacity = Integer.parseInt(rawCapacity.toString());
+                            venueMap.put("capacity", capacity);
+                        } catch (Exception e) {
+                            venueMap.put("capacity", null);
+                        }
+                    } else {
+                        venueMap.put("capacity", null);
+                    }
+
+                    // Timezone and other details
+                    venueMap.put("timezone", venue.get("timezone"));
+                    venueMap.put("postal_code", venue.get("postalCode"));
+
+                    // Upcoming events
+                    venueMap.put("upcoming_events_count", venue.get("upcomingEvents"));
+
+                    // Legacy fields for compatibility
+                    venueMap.put("seating_capacity", null);
+                    venueMap.put("standing_capacity", null);
+                    venueMap.put("tier", "");
+                    venueMap.put("activity_level", "");
+                    venueMap.put("data_quality_score", "");
+
+                    allVenues.add(venueMap);
+                }
+
+                // Pagination
+                Map pageInfo = (Map) response.get("page");
+                int totalPages = (pageInfo != null && pageInfo.get("totalPages") != null) ? ((Number) pageInfo.get("totalPages")).intValue() : 1;
+                currentPage++;
+                // Only stop if we've collected enough venues or reached the last page
+                if (currentPage >= totalPages || allVenues.size() >= size) {
+                    morePages = false;
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error fetching venues from Ticketmaster API: {}", e.getMessage());
+        }
+        // Sort by upcoming events count (descending), then by completeness score (descending), then by distance (ascending)
+        allVenues.sort((v1, v2) -> {
+            // First, compare by upcoming events count (descending)
+            int upcoming1 = getUpcomingEventsCount(v1.get("upcoming_events_count"));
+            int upcoming2 = getUpcomingEventsCount(v2.get("upcoming_events_count"));
+            
+            if (upcoming1 != upcoming2) {
+                return Integer.compare(upcoming2, upcoming1); // Descending - more events first
+            }
+            
+            // If upcoming events are equal, sort by completeness score (descending)
+            int score1 = 0;
+            int score2 = 0;
+            if (v1.get("capacity") != null) score1++;
+            if (v1.get("image_url") != null) score1++;
+            if (v1.get("address") != null && !v1.get("address").toString().isBlank()) score1++;
+            if (v1.get("contact_phone") != null) score1++;
+            if (v1.get("box_office_hours") != null) score1++;
+            if (v1.get("parking_info") != null) score1++;
+            if (v1.get("accessibility_info") != null) score1++;
+            if (v1.get("general_rules") != null) score1++;
+
+            if (v2.get("capacity") != null) score2++;
+            if (v2.get("image_url") != null) score2++;
+            if (v2.get("address") != null && !v2.get("address").toString().isBlank()) score2++;
+            if (v2.get("contact_phone") != null) score2++;
+            if (v2.get("box_office_hours") != null) score2++;
+            if (v2.get("parking_info") != null) score2++;
+            if (v2.get("accessibility_info") != null) score2++;
+            if (v2.get("general_rules") != null) score2++;
+
+            if (score1 != score2) {
+                return Integer.compare(score2, score1); // Descending
+            }
+            
+            // If scores are equal, sort by distance (ascending)
+            double d1 = v1.get("distance_from_search") instanceof Number ? ((Number)v1.get("distance_from_search")).doubleValue() : Double.MAX_VALUE;
+            double d2 = v2.get("distance_from_search") instanceof Number ? ((Number)v2.get("distance_from_search")).doubleValue() : Double.MAX_VALUE;
+            return Double.compare(d1, d2);
+        });
+        // Return only up to the requested size
+        return allVenues.size() > size ? allVenues.subList(0, size) : allVenues;
     }
 } 
